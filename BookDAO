@@ -1,0 +1,39 @@
+package com.anushka.library.dao;
+
+import com.anushka.library.db.Database;
+import com.anushka.library.model.Book;
+import java.sql.*;
+import java.util.*;
+
+public class BookDAO {
+    public void add(Book b) throws SQLException {
+        String q="INSERT INTO books(title,author,category,isbn,total_copies,available_copies) VALUES(?,?,?,?,?,?)";
+        try(Connection c=Database.getConnection(); PreparedStatement p=c.prepareStatement(q)){
+            p.setString(1,b.getTitle());p.setString(2,b.getAuthor());p.setString(3,b.getCategory());
+            p.setString(4,b.getIsbn());p.setInt(5,b.getTotalCopies());p.setInt(6,b.getTotalCopies());p.executeUpdate();
+        }
+    }
+    public void delete(int id) throws SQLException {
+        try(Connection c=Database.getConnection(); PreparedStatement p=c.prepareStatement("DELETE FROM books WHERE id=?")){
+            p.setInt(1,id);p.executeUpdate();
+        }
+    }
+    public List<Book> search(String term) throws SQLException {
+        List<Book> list=new ArrayList<>();
+        String q="SELECT * FROM books WHERE lower(title) LIKE ? OR lower(author) LIKE ? OR lower(category) LIKE ? ORDER BY title";
+        try(Connection c=Database.getConnection();PreparedStatement p=c.prepareStatement(q)){
+            String t="%"+term.toLowerCase()+"%";p.setString(1,t);p.setString(2,t);p.setString(3,t);
+            try(ResultSet r=p.executeQuery()){while(r.next()) list.add(map(r));}
+        }
+        return list;
+    }
+    public Book find(int id) throws SQLException {
+        try(Connection c=Database.getConnection();PreparedStatement p=c.prepareStatement("SELECT * FROM books WHERE id=?")){
+            p.setInt(1,id);try(ResultSet r=p.executeQuery()){return r.next()?map(r):null;}
+        }
+    }
+    private Book map(ResultSet r)throws SQLException{
+        return new Book(r.getInt("id"),r.getString("title"),r.getString("author"),
+                r.getString("category"),r.getString("isbn"),r.getInt("total_copies"),r.getInt("available_copies"));
+    }
+}
