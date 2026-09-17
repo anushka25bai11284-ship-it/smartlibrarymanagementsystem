@@ -1,0 +1,108 @@
+package com.anushka.library.ui;
+
+import com.anushka.library.dao.*;
+import com.anushka.library.model.*;
+import com.anushka.library.service.*;
+import com.anushka.library.util.Validator;
+
+import javax.swing.*;
+import javax.swing.table.DefaultTableModel;
+import java.awt.*;
+import java.util.List;
+
+public class LibraryFrame extends JFrame {
+    private final BookDAO bookDAO=new BookDAO();
+    private final MemberDAO memberDAO=new MemberDAO();
+    private final LoanService loanService=new LoanService();
+    private final RecommendationService recommendationService=new RecommendationService();
+    private final ReportService reportService=new ReportService();
+    private final DefaultTableModel bookModel=new DefaultTableModel(
+            new Object[]{"ID","Title","Author","Category","ISBN","Total","Available"},0);
+    private final JTable bookTable=new JTable(bookModel);
+
+    public LibraryFrame(){
+        setTitle("Smart Library Management System");
+        setSize(1000,650);setLocationRelativeTo(null);
+        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        JTabbedPane tabs=new JTabbedPane();
+        tabs.addTab("Books",booksPanel());
+        tabs.addTab("Members",membersPanel());
+        tabs.addTab("Issue / Return",loanPanel());
+        tabs.addTab("Recommendations",recommendPanel());
+        tabs.addTab("Dashboard",dashboardPanel());
+        add(tabs);
+        refreshBooks();
+    }
+
+    private JPanel booksPanel(){
+        JPanel p=new JPanel(new BorderLayout(8,8));
+        JPanel top=new JPanel();
+        JTextField search=new JTextField(25);
+        JButton find=new JButton("Search"),add=new JButton("Add Book"),del=new JButton("Delete Selected");
+        top.add(new JLabel("Search:"));top.add(search);top.add(find);top.add(add);top.add(del);
+        find.addActionListener(e->{try{loadBooks(bookDAO.search(search.getText().trim()));}catch(Exception x){showError(x);}});
+        add.addActionListener(e->addBookDialog());
+        del.addActionListener(e->deleteSelectedBook());
+        p.add(top,BorderLayout.NORTH);p.add(new JScrollPane(bookTable),BorderLayout.CENTER);
+        return p;
+    }
+
+    private JPanel membersPanel(){
+        JPanel p=new JPanel(new BorderLayout(8,8)); DefaultTableModel m=new DefaultTableModel(
+                new Object[]{"ID","Name","Email","Phone"},0); JTable t=new JTable(m);
+        JButton add=new JButton("Register Member"),refresh=new JButton("Refresh");
+        JPanel top=new JPanel();top.add(add);top.add(refresh);p.add(top,BorderLayout.NORTH);p.add(new JScrollPane(t),BorderLayout.CENTER);
+        Runnable load=()->{try{m.setRowCount(0);for(Member x:memberDAO.all())m.addRow(new Object[]{x.getId(),x.getName(),x.getEmail(),x.getPhone()});}catch(Exception e){showError(e);}};
+        add.addActionListener(e->{
+            JTextField n=new JTextField(),em=new JTextField(),ph=new JTextField();
+            Object[] msg={"Name:",n,"Email:",em,"Phone:",ph};
+            if(JOptionPane.showConfirmDialog(this,msg,"Register Member",JOptionPane.OK_CANCEL_OPTION)==JOptionPane.OK_OPTION)
+                try{Validator.required(n.getText(),"Name");Validator.email(em.getText());memberDAO.add(new Member(n.getText(),em.getText(),ph.getText()));load.run();}
+                catch(Exception x){showError(x);}
+        }); refresh.addActionListener(e->load.run()); load.run(); return p;
+    }
+
+    private JPanel loanPanel(){
+        JPanel p=new JPanel(new GridBagLayout());GridBagConstraints g=new GridBagConstraints();g.insets=new Insets(8,8,8,8);
+        JTextField bid=new JTextField(12),mid=new JTextField(12),lid=new JTextField(12);
+        JButton issue=new JButton("Issue Book"),ret=new JButton("Return Book");
+        g.gridx=0;g.gridy=0;p.add(new JLabel("Book ID:"),g);g.gridx=1;p.add(bid,g);
+        g.gridx=0;g.gridy=1;p.add(new JLabel("Member ID:"),g);g.gridx=1;p.add(mid,g);
+        g.gridx=0;g.gridy=2;p.add(issue,g);g.gridx=1;p.add(ret,g);
+        g.gridx=0;g.gridy=3;p.add(new JLabel("Loan ID for return:"),g);g.gridx=1;p.add(lid,g);
+        issue.addActionListener(e->tryIssue(bid,mid));ret.addActionListener(e->tryReturn(lid));return p;
+    }
+
+    private JPanel recommendPanel(){
+        JPanel p=new JPanel(new BorderLayout(8,8));JTextField id=new JTextField(8);JTextArea out=new JTextArea();
+        JButton b=new JButton("Recommend");JPanel top=new JPanel();top.add(new JLabel("Member ID:"));top.add(id);top.add(b);
+        p.add(top,BorderLayout.NORTH);p.add(new JScrollPane(out),BorderLayout.CENTER);
+        b.addActionListener(e->{try{List<String> r=recommendationService.recommend(Integer.parseInt(id.getText()));out.setText(String.join("\n",r));}catch(Exception x){showError(x);}});
+        return p;
+    }
+
+    private JPanel dashboardPanel(){
+        JPanel p=new JPanel(new BorderLayout());JTextArea a=new JTextArea();a.setFont(new Font(Font.MONOSPACED,Font.PLAIN,16));
+        JButton b=new JButton("Refresh Dashboard");b.addActionListener(e->{try{a.setText(reportService.dashboard());}catch(Exception x){showError(x);}});
+        p.add(b,BorderLayout.NORTH);p.add(new JScrollPane(a),BorderLayout.CENTER);return p;
+    }
+
+    private void addBookDialog(){
+        JTextField t=new JTextField(),a=new JTextField(),c=new JTextField(),i=new JTextField(),n=new JTextField();
+        Object[] msg={"Title:",t,"Author:",a,"Category:",c,"ISBN:",i,"Total copies:",n};
+        if(JOptionPane.showConfirmDialog(this,msg,"Add Book",JOptionPane.OK_CANCEL_OPTION)==JOptionPane.OK_OPTION)
+            try{Validator.required(t.getText(),"Title");Validator.required(a.getText(),"Author");Validator.required(c.getText(),"Category");
+                int copies=Integer.parseInt(n.getText());Validator.positive(copies,"Copies");
+                bookDAO.add(new Book(t.getText(),a.getText(),c.getText(),i.getText(),copies));refreshBooks();
+            }catch(Exception e){showError(e);}
+    }
+    private void deleteSelectedBook(){
+        int row=bookTable.getSelectedRow();if(row<0){showError(new IllegalArgumentException("Select a book first."));return;}
+        try{bookDAO.delete((int)bookModel.getValueAt(row,0));refreshBooks();}catch(Exception e){showError(e);}
+    }
+    private void tryIssue(JTextField b,JTextField m){try{loanService.issueBook(Integer.parseInt(b.getText()),Integer.parseInt(m.getText()));refreshBooks();JOptionPane.showMessageDialog(this,"Book issued successfully. Due in 14 days.");}catch(Exception e){showError(e);}}
+    private void tryReturn(JTextField l){try{double fine=loanService.returnBook(Integer.parseInt(l.getText()));refreshBooks();JOptionPane.showMessageDialog(this,"Book returned. Fine: ₹"+fine);}catch(Exception e){showError(e);}}
+    private void refreshBooks(){try{loadBooks(bookDAO.search(""));}catch(Exception e){showError(e);}}
+    private void loadBooks(List<Book> books){bookModel.setRowCount(0);for(Book b:books)bookModel.addRow(new Object[]{b.getId(),b.getTitle(),b.getAuthor(),b.getCategory(),b.getIsbn(),b.getTotalCopies(),b.getAvailableCopies()});}
+    private void showError(Exception e){JOptionPane.showMessageDialog(this,e.getMessage(),"Error",JOptionPane.ERROR_MESSAGE);}
+}
