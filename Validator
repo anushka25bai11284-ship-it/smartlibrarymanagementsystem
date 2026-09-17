@@ -1,0 +1,17 @@
+package com.anushka.library.util;
+
+public final class Validator {
+    private Validator() {}
+    public static void required(String value, String field) {
+        if (value == null || value.trim().isEmpty())
+            throw new IllegalArgumentException(field + " cannot be empty.");
+    }
+    public static void positive(int value, String field) {
+        if (value <= 0) throw new IllegalArgumentException(field + " must be positive.");
+    }
+    public static void email(String value) {
+        required(value,"Email");
+        if (!value.matches("^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+$"))
+            throw new IllegalArgumentException("Enter a valid email address.");
+    }
+}
