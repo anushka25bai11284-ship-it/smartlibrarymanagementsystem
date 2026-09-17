@@ -1,0 +1,63 @@
+package com.anushka.library.service;
+
+import com.anushka.library.db.Database;
+import java.sql.*;
+import java.time.*;
+
+public class LoanService {
+    private static final int LOAN_DAYS=14;
+    private static final double FINE_PER_DAY=5.0;
+
+    public void issueBook(int bookId,int memberId)throws Exception{
+        try(Connection c=Database.getConnection()){
+            c.setAutoCommit(false);
+            try{
+                int available;
+                try(PreparedStatement p=c.prepareStatement("SELECT available_copies FROM books WHERE id=?")){
+                    p.setInt(1,bookId);try(ResultSet r=p.executeQuery()){
+                        if(!r.next())throw new IllegalArgumentException("Book not found.");
+                        available=r.getInt(1);
+                    }
+                }
+                if(available<=0)throw new IllegalStateException("No copy is currently available.");
+                String q="INSERT INTO loans(book_id,member_id,issue_date,due_date,status) VALUES(?,?,?,?,?)";
+                try(PreparedStatement p=c.prepareStatement(q)){
+                    LocalDate now=LocalDate.now();
+                    p.setInt(1,bookId);p.setInt(2,memberId);p.setString(3,now.toString());
+                    p.setString(4,now.plusDays(LOAN_DAYS).toString());p.setString(5,"ISSUED");p.executeUpdate();
+                }
+                try(PreparedStatement p=c.prepareStatement("UPDATE books SET available_copies=available_copies-1 WHERE id=?")){
+                    p.setInt(1,bookId);p.executeUpdate();
+                }
+                c.commit();
+            }catch(Exception e){c.rollback();throw e;}
+        }
+    }
+
+    public double returnBook(int loanId)throws Exception{
+        try(Connection c=Database.getConnection()){
+            c.setAutoCommit(false);
+            try{
+                int bookId; LocalDate due;
+                try(PreparedStatement p=c.prepareStatement("SELECT book_id,due_date,status FROM loans WHERE id=?")){
+                    p.setInt(1,loanId);try(ResultSet r=p.executeQuery()){
+                        if(!r.next())throw new IllegalArgumentException("Loan not found.");
+                        if(!"ISSUED".equals(r.getString("status")))throw new IllegalStateException("Loan is already returned.");
+                        bookId=r.getInt("book_id");due=LocalDate.parse(r.getString("due_date"));
+                    }
+                }
+                LocalDate today=LocalDate.now();
+                long late=Math.max(0,Duration.between(due.atStartOfDay(),today.atStartOfDay()).toDays());
+                double fine=late*FINE_PER_DAY;
+                try(PreparedStatement p=c.prepareStatement(
+                        "UPDATE loans SET return_date=?,fine=?,status='RETURNED' WHERE id=?")){
+                    p.setString(1,today.toString());p.setDouble(2,fine);p.setInt(3,loanId);p.executeUpdate();
+                }
+                try(PreparedStatement p=c.prepareStatement("UPDATE books SET available_copies=available_copies+1 WHERE id=?")){
+                    p.setInt(1,bookId);p.executeUpdate();
+                }
+                c.commit(); return fine;
+            }catch(Exception e){c.rollback();throw e;}
+        }
+    }
+}
