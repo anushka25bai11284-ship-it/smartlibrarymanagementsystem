@@ -1,0 +1,34 @@
+package com.anushka.library.service;
+
+import com.anushka.library.db.Database;
+import java.sql.*;
+import java.util.*;
+
+public class RecommendationService {
+    public List<String> recommend(int memberId)throws SQLException{
+        List<String> out=new ArrayList<>();
+        String q="""
+            SELECT b.title, b.category, COUNT(*) AS cnt
+            FROM loans l JOIN books b ON b.id=l.book_id
+            WHERE l.member_id=?
+            GROUP BY b.category
+            ORDER BY cnt DESC
+            LIMIT 3
+            """;
+        List<String> categories=new ArrayList<>();
+        try(Connection c=Database.getConnection();PreparedStatement p=c.prepareStatement(q)){
+            p.setInt(1,memberId);try(ResultSet r=p.executeQuery()){while(r.next())categories.add(r.getString("category"));}
+        }
+        if(categories.isEmpty()){out.add("No borrowing history yet. Try searching the catalog by topic.");return out;}
+        String q2="SELECT title,author,category FROM books WHERE category=? AND available_copies>0 ORDER BY title LIMIT 5";
+        try(Connection c=Database.getConnection()){
+            for(String cat:categories)try(PreparedStatement p=c.prepareStatement(q2)){
+                p.setString(1,cat);try(ResultSet r=p.executeQuery()){
+                    while(r.next())out.add(r.getString("title")+" — "+r.getString("author")+" ["+r.getString("category")+"]");
+                }
+            }
+        }
+        if(out.isEmpty())out.add("No available books found in your preferred categories.");
+        return out;
+    }
+}
