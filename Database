@@ -1,0 +1,53 @@
+package com.anushka.library.db;
+
+import java.sql.*;
+
+public final class Database {
+    private static final String URL = "jdbc:sqlite:library.db";
+
+    private Database() {}
+
+    public static Connection getConnection() throws SQLException {
+        return DriverManager.getConnection(URL);
+    }
+
+    public static void initialize() {
+        String books = """
+            CREATE TABLE IF NOT EXISTS books(
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                title TEXT NOT NULL,
+                author TEXT NOT NULL,
+                category TEXT NOT NULL,
+                isbn TEXT UNIQUE,
+                total_copies INTEGER NOT NULL CHECK(total_copies >= 0),
+                available_copies INTEGER NOT NULL CHECK(available_copies >= 0)
+            )""";
+        String members = """
+            CREATE TABLE IF NOT EXISTS members(
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                email TEXT NOT NULL UNIQUE,
+                phone TEXT
+            )""";
+        String loans = """
+            CREATE TABLE IF NOT EXISTS loans(
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                book_id INTEGER NOT NULL,
+                member_id INTEGER NOT NULL,
+                issue_date TEXT NOT NULL,
+                due_date TEXT NOT NULL,
+                return_date TEXT,
+                fine REAL DEFAULT 0,
+                status TEXT NOT NULL,
+                FOREIGN KEY(book_id) REFERENCES books(id),
+                FOREIGN KEY(member_id) REFERENCES members(id)
+            )""";
+        try (Connection c = getConnection(); Statement s = c.createStatement()) {
+            s.executeUpdate(books);
+            s.executeUpdate(members);
+            s.executeUpdate(loans);
+        } catch (SQLException e) {
+            throw new RuntimeException("Database initialization failed: " + e.getMessage(), e);
+        }
+    }
+}
