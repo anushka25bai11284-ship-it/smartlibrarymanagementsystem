@@ -1,0 +1,23 @@
+package com.anushka.library.service;
+
+import com.anushka.library.db.Database;
+import java.sql.*;
+
+public class ReportService {
+    public String dashboard()throws SQLException{
+        int books=count("SELECT COALESCE(SUM(total_copies),0) FROM books");
+        int available=count("SELECT COALESCE(SUM(available_copies),0) FROM books");
+        int members=count("SELECT COUNT(*) FROM members");
+        int issued=count("SELECT COUNT(*) FROM loans WHERE status='ISSUED'");
+        return "SMART LIBRARY DASHBOARD\n\n"+
+                "Total book copies : "+books+"\n"+
+                "Available copies  : "+available+"\n"+
+                "Registered members: "+members+"\n"+
+                "Active loans      : "+issued+"\n"+
+                "Fine rate         : ₹5/day after due date\n"+
+                "Loan duration     : 14 days";
+    }
+    private int count(String q)throws SQLException{
+        try(Connection c=Database.getConnection();PreparedStatement p=c.prepareStatement(q);ResultSet r=p.executeQuery()){return r.getInt(1);}
+    }
+}
