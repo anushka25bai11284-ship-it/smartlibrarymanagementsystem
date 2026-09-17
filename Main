@@ -1,0 +1,16 @@
+package com.anushka.library;
+
+import com.anushka.library.db.Database;
+import com.anushka.library.ui.LibraryFrame;
+
+import javax.swing.*;
+
+public class Main {
+    public static void main(String[] args) {
+        Database.initialize();
+        SwingUtilities.invokeLater(() -> {
+            LibraryFrame frame = new LibraryFrame();
+            frame.setVisible(true);
+        });
+    }
+}
